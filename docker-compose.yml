@@ -1,0 +1,87 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: wp_mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: wp_db
+      MYSQL_USER: wp_user
+      MYSQL_PASSWORD: 'random_pass'
+      MYSQL_ROOT_PASSWORD: 'random_admin_pass'
+    volumes:
+      - ./db-data:/var/lib/mysql
+    command: '--default-authentication-plugin=mysql_native_password'
+    networks:
+      - app
+
+  wordpress:
+    build:
+      context: ./docker
+    # image: wordpress_app:latest
+    container_name: wp_app
+    restart: always
+    depends_on:
+      - db
+      # - smtp
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wp_db
+      WORDPRESS_DB_USER: wp_user
+      WORDPRESS_DB_PASSWORD: 'random_pass'
+      WORDPRESS_CONFIG_EXTRA: "define('FORCE_SSL_ADMIN', true);"
+    volumes:
+      - ./wp-content:/var/www/html/wp-content
+      - ./wp:/var/www/html
+    networks:
+      - app
+
+  nginx:
+    image: nginx:1.23.1-alpine
+    container_name: wp_nginx
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./wp:/var/www/html:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/custom.conf:/etc/nginx/nginx.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /tmp/acme_challenge:/tmp/acme_challenge
+    volumes_from:
+      - wordpress
+    depends_on:
+      - wordpress
+    networks:
+      - app
+
+  # phpmyadmin:
+  #   image: phpmyadmin
+  #   restart: always
+  #   depends_on:
+  #    - nginx
+  #   ports:
+  #     - 81:80
+  #   environment:
+  #     - PMA_ARBITRARY=1
+  #     - UPLOAD_LIMIT=30M
+  #   networks:
+  #     - app
+
+  # smtp:
+  #   image: mwader/postfix-relay
+  #   restart: always
+  #   environment:
+  #     POSTFIX_myhostname: your-domain.com
+  #     OPENDKIM_DOMAINS: your-domain.com
+  #   volumes:
+  #     - dkim-data:/etc/opendkim/keys
+
+# volumes:
+#   wp:
+  # dkim-data:
+networks:
+  app:
+    driver: bridge
